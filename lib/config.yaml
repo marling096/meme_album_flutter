@@ -1,0 +1,8 @@
+# 模板配置文件（不要在版本库中提交真实密钥）
+# 建议：将真实秘钥放到环境变量或 .env 文件，并在运行时加载（例如使用 flutter_dotenv）
+# 示例：
+#   API_KEY: ${API_KEY}
+#   SECRET_KEY: ${SECRET_KEY}
+
+API_KEY: ''      # 在本地复制为实际值或通过环境变量注入
+SECRET_KEY: ''   # 在本地复制为实际值或通过环境变量注入
