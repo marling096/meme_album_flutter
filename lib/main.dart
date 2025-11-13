@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:getwidget/getwidget.dart';
 import 'dart:io';
@@ -20,6 +20,15 @@ import 'package:event_bus/event_bus.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // await requestStoragePermissionOnStartup(); // 请求存储权限
+  await dotenv.load(fileName: '.env');
+
+  String apiKey = dotenv.env['API_KEY'] ?? '';
+  String secretKey = dotenv.env['SECRET_KEY'] ?? '';
+
+  List<String> rootdir =
+      dotenv.env['rootdir']?.split(',').toList() ?? ['lib/pages'];
+
+  print('rootdir: $rootdir');
 
   var logger = LoggerManager().logger;
 
@@ -32,7 +41,7 @@ void main() async {
   StoreService().registerDao('PicInfo', picInfoTable);
   StoreService().registerDao('Logger', loggerTable);
 
-  runApp(MyApp(eventBus: eventBus));
+  runApp(MyApp(eventBus: eventBus, rootdir: rootdir));
 
   OCRService(StoreService.instance, logger);
 
@@ -47,33 +56,37 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.eventBus});
-
+  const MyApp({super.key, required this.eventBus, required this.rootdir});
+  final List<String> rootdir;
   final EventBus eventBus;
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      themeMode: ThemeMode.system,
-      home: Home(eventBus: eventBus),
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
+      themeMode: ThemeMode.dark,
+      home: Home(eventBus: eventBus, rootdir: rootdir),
     );
   }
 }
 
-// ...existing code...
 class Home extends StatefulWidget {
-  const Home({super.key, required this.eventBus});
+  const Home({super.key, required this.eventBus, required this.rootdir});
 
   final EventBus eventBus;
+  final List<String> rootdir;
 
   @override
-  State<Home> createState() => _HomeState();
+  State<Home> createState() => _HomeState(rootdir);
 }
 
 class _HomeState extends State<Home> {
   StreamSubscription<String>? _sub;
   Timer? _timer;
+  final List<String> rootdir;
+  _HomeState(this.rootdir);
 
   @override
   void initState() {
@@ -101,16 +114,8 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    var rootdir = [''];
-    if (Platform.isWindows) {
-      rootdir = ['lib/pages', 'lib/store'];
-    }
-    if (Platform.isAndroid) {
-      rootdir = ['storage/emulated/0/Download'];
-    }
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
         title: Container(
           height: 36,
           decoration: BoxDecoration(
@@ -123,19 +128,15 @@ class _HomeState extends State<Home> {
           IconButton(
             icon: Icon(Icons.settings),
             onPressed: () {
-              Get.to(SettingsPage());
-              print("setting clickeed");
+              Get.to(() => SettingsPage());
+              // Get.changeThemeMode(
+              //   Get.isDarkMode ? ThemeMode.light : ThemeMode.dark,
+              // );
             },
-          ),
-          IconButton(
-            onPressed: () {
-              widget.eventBus.fire("EventBus Test Message");
-            },
-            icon: Icon(Icons.fork_right),
           ),
         ],
       ),
-      body: Center(child: AlbumPage(rootdir)),
+      body: Center(child: AlbumPage(this.rootdir)), //['lib/pages', 'lib/store']
     );
   }
 }
