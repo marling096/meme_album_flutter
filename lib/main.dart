@@ -19,18 +19,29 @@ import 'package:event_bus/event_bus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // await requestStoragePermissionOnStartup(); // 请求存储权限
+  await requestStoragePermissionOnStartup(); // 请求存储权限
   await dotenv.load(fileName: '.env');
 
-  String apiKey = dotenv.env['API_KEY'] ?? '';
-  String secretKey = dotenv.env['SECRET_KEY'] ?? '';
+  String api_Key = dotenv.env['API_KEY'] ?? '';
+  String secret_Key = dotenv.env['SECRET_KEY'] ?? '';
 
-  List<String> rootdir =
-      dotenv.env['rootdir']?.split(',').toList() ?? ['lib/pages'];
+  List<String> albumDir = [];
+  String logFile = '';
+  if (Platform.isAndroid) {
+    albumDir = albumDir =
+        dotenv.env['android_albumDir']?.split(',').toList() ??
+        ['storage/emulated/0/Download'];
+    logFile =
+        dotenv.env['android_logFile'] ?? 'storage/emulated/0/Download/logs.txt';
+  }
+  if (Platform.isWindows || Platform.isLinux) {
+    albumDir = dotenv.env['win_albumDir']?.split(',').toList() ?? ['lib/pages'];
+    logFile = dotenv.env['win_logFile'] ?? 'logs.txt';
+  }
 
-  print('rootdir: $rootdir');
+  // print('albumDir: $albumDir');
 
-  var logger = LoggerManager().logger;
+  var logger = LoggerManager((File(logFile))).logger;
 
   EventBus eventBus = EventBus();
 
@@ -41,7 +52,7 @@ void main() async {
   StoreService().registerDao('PicInfo', picInfoTable);
   StoreService().registerDao('Logger', loggerTable);
 
-  runApp(MyApp(eventBus: eventBus, rootdir: rootdir));
+  runApp(MyApp(eventBus: eventBus, albumDir: albumDir));
 
   OCRService(StoreService.instance, logger);
 
@@ -50,14 +61,15 @@ void main() async {
     StoreService.instance,
     eventBus,
     logger,
+    albumDir,
   ).init();
 
   // logger.i("Trace log begin");
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.eventBus, required this.rootdir});
-  final List<String> rootdir;
+  const MyApp({super.key, required this.eventBus, required this.albumDir});
+  final List<String> albumDir;
   final EventBus eventBus;
 
   // This widget is the root of your application.
@@ -67,26 +79,26 @@ class MyApp extends StatelessWidget {
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
       themeMode: ThemeMode.dark,
-      home: Home(eventBus: eventBus, rootdir: rootdir),
+      home: Home(eventBus: eventBus, albumDir: albumDir),
     );
   }
 }
 
 class Home extends StatefulWidget {
-  const Home({super.key, required this.eventBus, required this.rootdir});
+  const Home({super.key, required this.eventBus, required this.albumDir});
 
   final EventBus eventBus;
-  final List<String> rootdir;
+  final List<String> albumDir;
 
   @override
-  State<Home> createState() => _HomeState(rootdir);
+  State<Home> createState() => _HomeState(albumDir);
 }
 
 class _HomeState extends State<Home> {
   StreamSubscription<String>? _sub;
   Timer? _timer;
-  final List<String> rootdir;
-  _HomeState(this.rootdir);
+  final List<String> albumDir;
+  _HomeState(this.albumDir);
 
   @override
   void initState() {
@@ -136,7 +148,9 @@ class _HomeState extends State<Home> {
           ),
         ],
       ),
-      body: Center(child: AlbumPage(this.rootdir)), //['lib/pages', 'lib/store']
+      body: Center(
+        child: AlbumPage(this.albumDir),
+      ), //['lib/pages', 'lib/store']
     );
   }
 }

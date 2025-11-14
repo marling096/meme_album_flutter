@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:getwidget/getwidget.dart';
 import 'package:get/get.dart';
+import 'package:file_picker/file_picker.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -86,10 +87,7 @@ class _SettingDropdownState extends State<SettingDropdown> {
                     Theme.of(context).textTheme.bodyMedium?.color ??
                     Colors.black;
                 return Theme(
-                  data: Theme.of(context).copyWith(
-                    // canvasColor: Colors.transparent,
-                    // cardColor: Colors.transparent,
-                  ),
+                  data: Theme.of(context).copyWith(),
                   child: Material(
                     color: Colors.transparent,
                     child: Align(
@@ -184,8 +182,16 @@ class SettingChild extends StatelessWidget {
           flex: 1,
           child: IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: () {
-              print('clicked');
+            onPressed: () async {
+              String? selectedDirectory = await FilePicker.platform
+                  .getDirectoryPath();
+
+              if (selectedDirectory == null) {
+                // User canceled the picker
+              } else {
+                // Use the selected directory path
+                print('Selected directory: $selectedDirectory');
+              }
             },
           ),
         ),

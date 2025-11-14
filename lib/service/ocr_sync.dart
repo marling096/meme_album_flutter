@@ -1,21 +1,28 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-
+import 'package:get/get.dart';
+import 'package:path/path.dart' as p;
 import 'package:meme_album/service/ocr.dart';
 import 'package:meme_album/service/store.dart';
 
 import 'package:logger/logger.dart';
 import 'package:event_bus/event_bus.dart';
 
-String path = r'lib/pages/album';
-
 class OcrSync {
   final OCRService ocrService;
   final StoreService storeService;
   final EventBus eventbus;
   final Logger logger;
-
-  OcrSync(this.ocrService, this.storeService, this.eventbus, this.logger);
+  final List<String> albumDir;
+  List<String> pic_dirs = [];
+  OcrSync(
+    this.ocrService,
+    this.storeService,
+    this.eventbus,
+    this.logger,
+    this.albumDir,
+  );
 
   FutureOr<String> init() async {
     var result = await storeService.sort('PicInfo', 'id', 'DESC', '1');
@@ -23,12 +30,15 @@ class OcrSync {
     var lastPath = lastRecord?['path'];
     var lastmodfytime = lastRecord?['modifytime'];
     print('OcrSync init last record: $lastPath');
-
-    var processResult = await processDir(
-      path,
-      lastmodfytime ?? '',
-      lastPath ?? '',
-    );
+    print('album_dir: $albumDir');
+    var processResult = '';
+    for (var dir in albumDir) {
+      processResult = await processDir(
+        dir,
+        lastmodfytime ?? '',
+        lastPath ?? '',
+      );
+    }
     if (processResult == 'done') {
       eventbus.fire('ocr_sync_progress done');
     }
@@ -41,9 +51,47 @@ class OcrSync {
     String lastmodfytime,
     String lastPath,
   ) async {
-    var entities = await Directory(dir).list().toList();
+    try {
+      final entities = await Directory(dir).list().toList();
 
-    // 仅保留文件且扩展名为图片的实体
+      for (final entity in entities) {
+        if (entity is Directory) {
+          // 查找子目录中的第一张图片作为封面
+          final subEntities = await entity.list().toList();
+          final firstImage = subEntities.firstWhereOrNull(
+            (meta) => meta is File && _isImageFile(meta.path),
+          );
+          if (firstImage != null) {
+            pic_dirs.add(entity.path);
+          }
+        } else if (entity is File && _isImageFile(entity.path)) {
+          pic_dirs.add(entity.path);
+          // debugPrint('Added image: ${entity.path}');
+        }
+      }
+    } catch (e, st) {}
+    print('Processed directory: $pic_dirs');
+
+    // Build a flattened list of FileSystemEntity from the collected paths in pic_dirs.
+    // If an entry is an image file path, add it as a File; if it's a directory path, list its contents.
+    var entities = <FileSystemEntity>[];
+    for (final pth in pic_dirs) {
+      try {
+        if (_isImageFile(pth)) {
+          entities.add(File(pth));
+        } else {
+          final dirEntity = Directory(pth);
+          if (await dirEntity.exists()) {
+            entities.addAll(await dirEntity.list().toList());
+          }
+        }
+      } catch (e) {
+        // ignore errors per original behavior
+      }
+    }
+
+    print('Processing directory: $dir, found ${entities.length} entities');
+
     var fillist = entities
         .where(
           (e) => FileSystemEntity.isFileSync(e.path) && _isImageFile(e.path),
@@ -53,7 +101,7 @@ class OcrSync {
     fillist.sort((a, b) {
       final aTime = a.statSync().modified;
       final bTime = b.statSync().modified;
-      return aTime.compareTo(bTime); // 升序：旧文件在前
+      return aTime.compareTo(bTime);
     });
 
     for (var file in fillist) {

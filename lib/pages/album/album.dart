@@ -21,6 +21,8 @@ class AlbumController extends GetxController {
   /// 相册封面路径列表
   final RxList<String> covers = <String>[].obs;
 
+  List<String> pic_dirs = [];
+
   /// 根目录路径
   List<String> albumPath = [];
 
@@ -45,12 +47,13 @@ class AlbumController extends GetxController {
   ];
 
   @override
-  void onInit() {
+  List<String> onInit() {
     super.onInit();
-    debugPrint("AlbumController initialized for path: $albumPath");
+    // debugPrint("AlbumController initialized for path: $albumPath");
     for (var path in albumPath) {
       scanAlbum(path);
     }
+    return pic_dirs;
   }
 
   /// 判断文件是否为图片
@@ -64,6 +67,7 @@ class AlbumController extends GetxController {
     status.value = 'loading';
     covers.clear();
     final albumDir = Directory(path);
+
     //判断path是否为目录
 
     // if (!await albumDir.exists()) {
@@ -80,7 +84,7 @@ class AlbumController extends GetxController {
       return;
     }
 
-    debugPrint('Scanning album directory: $path');
+    // debugPrint('Scanning album directory: $path');
 
     try {
       final entities = await albumDir.list().toList();
@@ -94,12 +98,14 @@ class AlbumController extends GetxController {
           );
           if (firstImage != null) {
             covers.add(firstImage.path);
-            debugPrint('Added cover from subdir: ${firstImage.path}');
+            pic_dirs.add(entity.path);
+            // debugPrint('Added cover from subdir: ${firstImage.path}');
           }
         } else if (entity is File && _isImageFile(entity)) {
           // 直接添加图片文件
           covers.add(entity.path);
-          debugPrint('Added image: ${entity.path}');
+          pic_dirs.add(entity.path);
+          // debugPrint('Added image: ${entity.path}');
         }
       }
 
@@ -116,7 +122,7 @@ class AlbumPage extends StatefulWidget {
   final List<String> albumPath;
   AlbumPage(this.albumPath, {super.key}) {
     // 可选调试输出
-    debugPrint('path: $albumPath');
+    // debugPrint('path: $albumPath');
   }
 
   @override

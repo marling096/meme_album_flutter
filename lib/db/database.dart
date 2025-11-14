@@ -4,6 +4,9 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_simple/sqlite3_simple.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:package_info_plus/package_info_plus.dart';
 
 abstract class BaseDao<T> {
   final AppDatabase db;
@@ -59,7 +62,6 @@ class PicInfoTable extends BaseDao<PicInfo> {
     final tk = allowed.contains(tokenizer) ? tokenizer : 'simple';
     final tokenizerQuery = tk == 'jieba' ? 'jieba_query' : 'simple_query';
 
-    // 零宽空格与零宽非连接符用于前后包裹匹配文本
     const wrapperLeft = '\u200B';
     const wrapperRight = '\u200C';
 
@@ -150,7 +152,7 @@ class LoggerInfo {
 
 // 修正常量命名（content 原为 "PicInfo"，应为 "content"）
 final id = "id", name = "name", content = "content", path = "path";
-final fts5Table = "PicInfo_fts5";
+final fts5Table = "PicInfo_fts";
 
 const List<String> Tables = [
   'CREATE TABLE IF NOT EXISTS PicInfo(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, path TEXT, hash TEXT UNIQUE, content TEXT, modifytime TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)',
@@ -166,32 +168,117 @@ class AppDatabase {
 
   Database? _db;
 
+  static const bool copyJiebaFromAssets = true;
+  static const String jiebaAssetPath = 'assets/jieba_dict/';
+
+  static const List<String> jiebaAssetCandidates = [
+    'assets/jieba_dict/hmm_model.utf8',
+    'assets/jieba_dict/idf.utf8',
+    'assets/jieba_dict/jieba.dict.utf8',
+    'assets/jieba_dict/stop_words.utf8',
+    'assets/jieba_dict/user.dict.utf8',
+  ];
+
   static Future<void> init() async {
     WidgetsFlutterBinding.ensureInitialized();
     if (_instance._db != null) return;
     try {
-      // 使用当前工作目录创建数据库文件（可根据需要调整为应用目录）
-      final dbDir = Directory.current;
+      Directory dbDir;
+      try {
+        if (Platform.isAndroid) {
+          final pkgInfo = await PackageInfo.fromPlatform();
+          final pkg = pkgInfo.packageName;
+          dbDir = Directory(join('/data/data', pkg, 'databases'));
+        } else {
+          final dir = await getApplicationDocumentsDirectory();
+          dbDir = Directory('${dir.path}/data.db');
+        }
+      } catch (e) {
+        dbDir = Directory.current;
+      }
       if (!await dbDir.exists()) {
         await dbDir.create(recursive: true);
       }
-      // final dbPath = join(dbDir.path, 'my.db');
-      final dbPath = r'D:\win_Desktop\win\flutter\meme_album\lib\db\my.db';
-      final jiebaDictPath =
-          r'D:\win_Desktop\win\flutter\meme_album\lib\db\jieba_dict.db';
-
-      // 加载扩展（如有），保存结巴字典到文件（saveJiebaDict 返回 SQL 语句）
+      final dbPath = join(dbDir.path, 'my.db');
+      final jiebaDictPath = join(dbDir.path, 'jieba_dict');
       sqlite3.loadSimpleExtension();
-      final jiebaDictSql = await sqlite3.saveJiebaDict(
-        jiebaDictPath,
-        overwriteWhenExist: true,
-      );
-      print("用于设置结巴分词字典路径：$jiebaDictSql");
+
+      String? jiebaDictSql;
+      final bool shouldCopyFromAssets =
+          (Platform.isAndroid || Platform.isWindows || Platform.isLinux) &&
+          copyJiebaFromAssets;
+
+      final targetDir = Directory(jiebaDictPath);
+
+      try {
+        final possibleFile = File(jiebaDictPath);
+        if (await possibleFile.exists()) {
+          await possibleFile.delete();
+        }
+
+        if (!await targetDir.exists()) {
+          await targetDir.create(recursive: true);
+        }
+      } catch (e) {
+        print('Failed to prepare jieba_dict directory: $e');
+      }
+
+      if (await targetDir.exists()) {
+        try {
+          if (shouldCopyFromAssets) {
+            bool copied = false;
+            for (final assetCandidate in jiebaAssetCandidates) {
+              try {
+                final data = await rootBundle.load(assetCandidate);
+                // 将 asset 的内容写入目标目录下的同名文件（而不是写入目录本身）
+                final assetFileName = basename(assetCandidate);
+                final destFile = File(join(targetDir.path, assetFileName));
+                print('Copying $assetCandidate to ${destFile.path} ...');
+                await destFile.writeAsBytes(
+                  data.buffer.asUint8List(),
+                  flush: true,
+                );
+                jiebaDictSql = await sqlite3.saveJiebaDict(
+                  jiebaDictPath,
+                  overwriteWhenExist: false,
+                );
+                print("用于设置结巴分词字典路径（assets 拷贝）：$jiebaDictSql");
+                copied = true;
+                break;
+              } catch (e) {
+                print('Failed to copy $assetCandidate: $e');
+              }
+            }
+            if (!copied) {
+              print(
+                'jieba_dict 目录存在，但未找到可用文件；且从 assets 拷贝失败。'
+                '请确认 pubspec.yaml 中已列出 assets/jieba_dict/ 下的具体文件，'
+                '或将 copyJiebaFromAssets 设置为 false 来禁用自动拷贝。',
+              );
+            }
+          } else {
+            print('jieba_dict 目录存在，但未找到可用文件。跳过结巴字典设置。');
+          }
+        } catch (e) {
+          print('检查 jieba_dict 目录时出错：$e');
+        }
+      } else if (shouldCopyFromAssets) {
+        bool copied = false;
+
+        if (!copied) {
+          print(
+            'Failed to copy jieba dict from assets. 请确认 pubspec.yaml 中已逐一声明 assets/jieba_dict/ 下的具体文件名，'
+            '或将 copyJiebaFromAssets 设置为 false 来禁用自动拷贝。',
+          );
+        }
+      } else {
+        print(
+          'jieba_dict not found at $jiebaDictPath. Skipping jieba dict setup.',
+        );
+      }
 
       // 先打开 sqlite3 数据库，再对其执行 jiebaDictSql（之前执行顺序会失效，因为 _db 为空）
       _instance._db = sqlite3.open(dbPath);
-
-      // 如果 saveJiebaDict 返回了 SQL，则在已打开的 db 上执行
       if (jiebaDictSql != null && jiebaDictSql.isNotEmpty) {
         _instance._db!.execute(jiebaDictSql);
       }
@@ -231,7 +318,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS PicInfo_fts USING fts5(
         'INSERT INTO PicInfo_fts(PicInfo_fts) VALUES (\'rebuild\');',
       );
     } catch (e, st) {
-      // 捕获并打印初始化错误，便于调试
       print('AppDatabase init error: $e\n$st');
       rethrow;
     }
@@ -245,7 +331,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS PicInfo_fts USING fts5(
     }
   }
 
-  /// 异步获取已初始化的 sqlite3 Database（会确保 init 已执行）
   static Future<Database> getDatabase() async {
     await AppDatabase.init();
     return await _instance.database;
@@ -317,7 +402,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS PicInfo_fts USING fts5(
       sql += ' WHERE $where';
     }
 
-    // 支持带参数或不带参数的查询
     ResultSet resultSet;
     if (whereArgs == null || whereArgs.isEmpty) {
       resultSet = _db!.select(sql);

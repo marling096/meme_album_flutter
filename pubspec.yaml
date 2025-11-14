@@ -34,7 +34,7 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  file_picker: ^10.3.3
+  file_picker: ^10.3.6
   mobx: ^2.5.0
   flutter_mobx: ^2.3.0
   get: ^4.7.2
@@ -55,6 +55,7 @@ dependencies:
   logger: ^2.6.2
   event_bus: ^2.0.1
   flutter_dotenv: ^6.0.0
+  package_info_plus: ^9.0.0
   
   
 
@@ -88,6 +89,12 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - .env
+    - assets/jieba_dict/
+    - assets/jieba_dict/hmm_model.utf8
+    - assets/jieba_dict/idf.utf8
+    - assets/jieba_dict/jieba.dict.utf8
+    - assets/jieba_dict/stop_words.utf8  
+    - assets/jieba_dict/user.dict.utf8
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
