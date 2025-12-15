@@ -68,7 +68,7 @@ class StoreService {
     final dao = Tables[tableKey];
     var path = '';
     if (dao != null && dao is PicInfoTable) {
-      final result = await dao.search(query, tokenizer);
+      final result = dao.search(query, tokenizer);
       for (final row in result ?? []) {
         path = row['path'];
         print("--- Search Result ---");

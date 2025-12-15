@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 /// 读取目录下的直接子项并返回需要的元数据

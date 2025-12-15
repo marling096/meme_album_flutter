@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/services.dart';
@@ -7,114 +9,59 @@ import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:event_bus/event_bus.dart';
+import 'package:meme_album/utils/album_utils.dart';
 
 import 'package:meme_album/service/ocr.dart';
 
-// 新增：路径标准化为使用正斜杠（显示与比较统一）
 String _normalizePath(String path) => path.replaceAll(r'\', '/');
 
-/// AlbumController — 负责扫描目录并生成封面图片列表
 class AlbumController extends GetxController {
   /// 当前状态：idle / loading / done / error
   final RxString status = 'idle'.obs;
 
-  /// 相册封面路径列表
   final RxList<String> covers = <String>[].obs;
 
   List<String> pic_dirs = [];
 
-  /// 根目录路径
   List<String> albumPath = [];
 
+  AlbumUtils albumUtils = AlbumUtils();
+
   AlbumController(List<String> paths) {
-    // 将传入路径标准化（统一为正斜杠风格），便于后续比较与展示
     albumPath = paths.map(_normalizePath).toList();
   }
 
-  void load_new(String newPath) {
-    this.albumPath = [newPath];
-    scanAlbum(newPath);
-  }
-
-  static const List<String> _imageExts = [
-    '.jpg',
-    '.jpeg',
-    '.png',
-    '.gif',
-    '.bmp',
-    '.webp',
-    '.heic',
-  ];
-
   @override
-  List<String> onInit() {
+  Future<void> onInit() async {
     super.onInit();
-    // debugPrint("AlbumController initialized for path: $albumPath");
-    for (var path in albumPath) {
-      scanAlbum(path);
-    }
-    return pic_dirs;
-  }
-
-  /// 判断文件是否为图片
-  bool _isImageFile(FileSystemEntity file) {
-    final ext = p.extension(file.path).toLowerCase();
-    return _imageExts.contains(ext);
-  }
-
-  /// 扫描相册目录
-  Future<void> scanAlbum(path) async {
+    Set<String> albums = {};
     status.value = 'loading';
-    covers.clear();
-    final albumDir = Directory(path);
 
-    //判断path是否为目录
-
-    // if (!await albumDir.exists()) {
-    //   status.value = 'error';
-    //   debugPrint('Album directory not found: $path');
-    //   return;
-    // }
-    final type = await FileSystemEntity.type(path);
-    if (type != FileSystemEntityType.directory) {
-      // status.value = 'error';
-      // debugPrint('Path is not a directory: $path');
-      covers.add(path);
-      status.value = 'done';
-      return;
+    for (String path in albumPath) {
+      if (Directory(path).existsSync()) {
+        albums.addAll(await albumUtils.scanAlbumDirectory(path));
+      }
+      if (File(path).existsSync()) {
+        covers.add(path);
+      }
     }
-
-    // debugPrint('Scanning album directory: $path');
-
-    try {
-      final entities = await albumDir.list().toList();
-
-      for (final entity in entities) {
-        if (entity is Directory) {
-          // 查找子目录中的第一张图片作为封面
-          final subEntities = await entity.list().toList();
-          final firstImage = subEntities.firstWhereOrNull(
-            (meta) => meta is File && _isImageFile(meta),
-          );
-          if (firstImage != null) {
-            covers.add(firstImage.path);
-            pic_dirs.add(entity.path);
-            // debugPrint('Added cover from subdir: ${firstImage.path}');
+    if (albums.isNotEmpty) {
+      for (String album in albums) {
+        if (File(album).existsSync()) {
+          covers.add(album);
+        }
+        if (Directory(album).existsSync()) {
+          final cover = await albumUtils.getAlbumCoverImage(album);
+          if (cover.isNotEmpty) {
+            covers.add(cover);
           }
-        } else if (entity is File && _isImageFile(entity)) {
-          // 直接添加图片文件
-          covers.add(entity.path);
-          pic_dirs.add(entity.path);
-          // debugPrint('Added image: ${entity.path}');
         }
       }
-
-      status.value = 'done';
-      debugPrint('Scan complete, found ${covers.length} covers.');
-    } catch (e, st) {
-      status.value = 'error';
-      debugPrint('Error while scanning album: $e\n$st');
     }
+
+    status.value = 'done';
+    print('AlbumController initialized with ${covers.length} covers.');
+    print('Covers: $covers');
   }
 }
 
@@ -140,15 +87,22 @@ class _AlbumPageState extends State<AlbumPage> {
       context: context,
       builder: (ctx) => GestureDetector(
         onTap: () => Navigator.of(ctx).pop(),
-        child: Dialog(
-          insetPadding: EdgeInsets.zero,
-          backgroundColor: Colors.transparent,
-          child: InteractiveViewer(
-            child: Image.file(
-              File(file),
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) =>
-                  const Center(child: Icon(Icons.broken_image, size: 80)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.all(10),
+            child: Dialog(
+              insetPadding: EdgeInsets.zero,
+              backgroundColor: Colors.transparent,
+              child: InteractiveViewer(
+                child: Image.file(
+                  File(file),
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) =>
+                      const Center(child: Icon(Icons.broken_image, size: 80)),
+                ),
+              ),
             ),
           ),
         ),

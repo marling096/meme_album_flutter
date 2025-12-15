@@ -15,6 +15,7 @@ import 'package:meme_album/service/store.dart';
 import 'package:meme_album/service/ocr_sync.dart';
 
 import 'package:meme_album/utils/log_manger.dart';
+import 'package:meme_album/utils/album_utils.dart';
 import 'package:event_bus/event_bus.dart';
 
 void main() async {
@@ -22,8 +23,8 @@ void main() async {
   await requestStoragePermissionOnStartup(); // 请求存储权限
   await dotenv.load(fileName: '.env');
 
-  String api_Key = dotenv.env['API_KEY'] ?? '';
-  String secret_Key = dotenv.env['SECRET_KEY'] ?? '';
+  String apiKey = dotenv.env['API_KEY'] ?? '';
+  String secretKey = dotenv.env['SECRET_KEY'] ?? '';
 
   List<String> albumDir = [];
   String logFile = '';
@@ -46,31 +47,29 @@ void main() async {
   EventBus eventBus = EventBus();
 
   await AppDatabase.init();
-  PicInfoTable picInfoTable = PicInfoTable(await AppDatabase.instance);
-  LoggerTable loggerTable = LoggerTable(await AppDatabase.instance);
+  PicInfoTable picInfoTable = PicInfoTable(AppDatabase.instance);
+  LoggerTable loggerTable = LoggerTable(AppDatabase.instance);
 
   StoreService().registerDao('PicInfo', picInfoTable);
   StoreService().registerDao('Logger', loggerTable);
 
-  runApp(MyApp(eventBus: eventBus, albumDir: albumDir));
-
   OCRService(StoreService.instance, logger);
 
-  String result = await OcrSync(
-    OCRService.instance,
-    StoreService.instance,
-    eventBus,
-    logger,
-    albumDir,
-  ).init();
+  // String result = await OcrSync(
+  //   OCRService.instance,
+  //   StoreService.instance,
+  //   eventBus,
+  //   logger,
+  //   albumDir,
+  // ).init();
 
-  // logger.i("Trace log begin");
+  runApp(MyApp(eventBus: null, albumDir: albumDir));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.eventBus, required this.albumDir});
+  const MyApp({super.key, this.eventBus, required this.albumDir});
   final List<String> albumDir;
-  final EventBus eventBus;
+  final EventBus? eventBus;
 
   // This widget is the root of your application.
   @override
@@ -85,9 +84,9 @@ class MyApp extends StatelessWidget {
 }
 
 class Home extends StatefulWidget {
-  const Home({super.key, required this.eventBus, required this.albumDir});
+  const Home({super.key, this.eventBus, required this.albumDir});
 
-  final EventBus eventBus;
+  final EventBus? eventBus;
   final List<String> albumDir;
 
   @override
@@ -104,17 +103,13 @@ class _HomeState extends State<Home> {
   void initState() {
     super.initState();
     // 只在 initState 注册一次
-    _sub = widget.eventBus.on<String>().listen((event) {
+    _sub = widget.eventBus?.on<String>().listen((event) {
       GFToast.showToast(
         'EventBus received: $event',
         context,
         toastPosition: GFToastPosition.BOTTOM,
       );
     });
-
-    // _timer = Timer.periodic(Duration(seconds: 3), (Timer timer) {
-    //   widget.eventBus.fire(DateTime.now().second);
-    // });
   }
 
   @override
@@ -140,7 +135,7 @@ class _HomeState extends State<Home> {
           IconButton(
             icon: Icon(Icons.settings),
             onPressed: () {
-              Get.to(() => SettingsPage());
+              Get.to(() => SettingsPage(eventBus: widget.eventBus));
               // Get.changeThemeMode(
               //   Get.isDarkMode ? ThemeMode.light : ThemeMode.dark,
               // );
@@ -148,9 +143,7 @@ class _HomeState extends State<Home> {
           ),
         ],
       ),
-      body: Center(
-        child: AlbumPage(this.albumDir),
-      ), //['lib/pages', 'lib/store']
+      body: Center(child: AlbumPage(albumDir)), //['lib/pages', 'lib/store']
     );
   }
 }

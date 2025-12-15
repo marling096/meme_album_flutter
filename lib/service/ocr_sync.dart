@@ -31,6 +31,14 @@ class OcrSync {
     var lastmodfytime = lastRecord?['modifytime'];
     print('OcrSync init last record: $lastPath');
     print('album_dir: $albumDir');
+
+    eventbus.on<String>().listen((event) {
+      print('Event received: $event');
+      if (event.startsWith('AlbumFolderPicker')) {
+        var folderPath = event.split(';')[1];
+        print('Received new album folder path: $folderPath');
+      }
+    });
     var processResult = '';
     for (var dir in albumDir) {
       processResult = await processDir(
@@ -56,7 +64,6 @@ class OcrSync {
 
       for (final entity in entities) {
         if (entity is Directory) {
-          // 查找子目录中的第一张图片作为封面
           final subEntities = await entity.list().toList();
           final firstImage = subEntities.firstWhereOrNull(
             (meta) => meta is File && _isImageFile(meta.path),
@@ -69,11 +76,9 @@ class OcrSync {
           // debugPrint('Added image: ${entity.path}');
         }
       }
-    } catch (e, st) {}
+    } catch (e) {}
     print('Processed directory: $pic_dirs');
 
-    // Build a flattened list of FileSystemEntity from the collected paths in pic_dirs.
-    // If an entry is an image file path, add it as a File; if it's a directory path, list its contents.
     var entities = <FileSystemEntity>[];
     for (final pth in pic_dirs) {
       try {
@@ -109,8 +114,7 @@ class OcrSync {
 
       var modifytime = (await File(file.path).lastModified()).toIso8601String();
 
-      if ((lastmodfytime != null && modifytime.compareTo(lastmodfytime) <= 0) ||
-          file.path == lastPath) {
+      if ((modifytime.compareTo(lastmodfytime) <= 0) || file.path == lastPath) {
         print(
           'Skipping file (modifytime not newer): ${file.path}, $modifytime',
         );

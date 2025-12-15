@@ -38,7 +38,7 @@ abstract class BaseDao<T> {
     String limit,
   ) async {
     final dbClient = db._db;
-    final result = await dbClient?.select(
+    final result = dbClient?.select(
       'SELECT * FROM $tableName ORDER BY $column $orderBy LIMIT $limit',
     );
     return result ?? [];
@@ -192,6 +192,7 @@ class AppDatabase {
         } else {
           final dir = await getApplicationDocumentsDirectory();
           dbDir = Directory('${dir.path}/data.db');
+          print('Database directory: ${dbDir.path}');
         }
       } catch (e) {
         dbDir = Directory.current;

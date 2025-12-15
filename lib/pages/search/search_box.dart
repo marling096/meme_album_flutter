@@ -10,7 +10,7 @@ import 'package:get/get.dart';
 import 'package:meme_album/pages/album/album.dart';
 
 class SearchBox extends StatelessWidget {
-  const SearchBox({Key? key}) : super(key: key);
+  const SearchBox({super.key});
 
   @override
   Widget build(BuildContext context) {
