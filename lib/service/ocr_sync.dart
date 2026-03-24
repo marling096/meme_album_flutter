@@ -1,34 +1,44 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:get/get.dart';
+import 'dart:convert';
 import 'package:path/path.dart' as p;
-import 'package:meme_album/service/ocr.dart';
-import 'package:meme_album/service/store.dart';
 
 import 'package:logger/logger.dart';
 import 'package:event_bus/event_bus.dart';
 
+import 'package:meme_album/core/utils/album_utils.dart';
+import 'package:meme_album/core/utils/ocr.dart';
+
+import 'package:crypto/crypto.dart';
+
+import 'package:meme_album/repository/pictures/pics_repo.dart';
+import 'package:meme_album/repository/pictures/pics_fts5_repo.dart';
+
 class OcrSync {
-  final OCRService ocrService;
-  final StoreService storeService;
   final EventBus eventbus;
   final Logger logger;
+  final PicsRepo picsRepo;
+  final PicFTS5Repo picFTS5Repo;
   final List<String> albumDir;
   List<String> pic_dirs = [];
   OcrSync(
-    this.ocrService,
-    this.storeService,
     this.eventbus,
     this.logger,
+    this.picsRepo,
+    this.picFTS5Repo,
     this.albumDir,
   );
 
   FutureOr<String> init() async {
-    var result = await storeService.sort('PicInfo', 'id', 'DESC', '1');
+    var result = await picsRepo.getList(
+      sortBy: 'modifytime',
+      order: 'DESC',
+      limit: 1,
+    );
     var lastRecord = result.isNotEmpty ? result.first : null;
-    var lastPath = lastRecord?['path'];
-    var lastmodfytime = lastRecord?['modifytime'];
+    var lastPath = lastRecord?.path;
+    var lastmodfytime = lastRecord?.modifytime;
     print('OcrSync init last record: $lastPath');
     print('album_dir: $albumDir');
 
@@ -60,18 +70,20 @@ class OcrSync {
     String lastPath,
   ) async {
     try {
+      await init();
+
       final entities = await Directory(dir).list().toList();
 
       for (final entity in entities) {
         if (entity is Directory) {
           final subEntities = await entity.list().toList();
           final firstImage = subEntities.firstWhereOrNull(
-            (meta) => meta is File && _isImageFile(meta.path),
+            (meta) => meta is File && isImageFile(meta.path),
           );
           if (firstImage != null) {
             pic_dirs.add(entity.path);
           }
-        } else if (entity is File && _isImageFile(entity.path)) {
+        } else if (entity is File && isImageFile(entity.path)) {
           pic_dirs.add(entity.path);
           // debugPrint('Added image: ${entity.path}');
         }
@@ -82,7 +94,7 @@ class OcrSync {
     var entities = <FileSystemEntity>[];
     for (final pth in pic_dirs) {
       try {
-        if (_isImageFile(pth)) {
+        if (isImageFile(pth)) {
           entities.add(File(pth));
         } else {
           final dirEntity = Directory(pth);
@@ -99,7 +111,7 @@ class OcrSync {
 
     var fillist = entities
         .where(
-          (e) => FileSystemEntity.isFileSync(e.path) && _isImageFile(e.path),
+          (e) => FileSystemEntity.isFileSync(e.path) && isImageFile(e.path),
         )
         .toList();
 
@@ -124,25 +136,29 @@ class OcrSync {
       var filePath = file.path;
       print('Processing file: $filePath');
       try {
-        await ocrService.ocrImageFile(filePath);
+        final bytes = await File(filePath).readAsBytes();
+        final fileHash = md5.convert(bytes).toString();
+        final fileName = p.basename(filePath);
+        final modifytime = (await File(
+          filePath,
+        ).lastModified()).toIso8601String();
+        final imageBase64 = base64Encode(bytes);
+
+        var result = await performOCR(imageBase64);
+        // print('OCR result for $fileName: $result');
+        await picsRepo.insertPic(
+          PicInfo(
+            name: fileName,
+            path: filePath,
+            hash: fileHash,
+            modifytime: modifytime,
+            content: result,
+          ),
+        );
       } catch (e) {
         return 'error: $e';
       }
     }
     return 'done';
-  }
-
-  // 新增：根据扩展名判断是否为常见图片格式
-  bool _isImageFile(String p) {
-    final ext = p.toLowerCase();
-    return ext.endsWith('.jpg') ||
-        ext.endsWith('.jpeg') ||
-        ext.endsWith('.png') ||
-        ext.endsWith('.gif') ||
-        ext.endsWith('.webp') ||
-        ext.endsWith('.bmp') ||
-        ext.endsWith('.heic') ||
-        ext.endsWith('.tiff') ||
-        ext.endsWith('.svg');
   }
 }

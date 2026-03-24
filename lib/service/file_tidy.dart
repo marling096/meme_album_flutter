@@ -1,11 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
-import 'package:meme_album/service/ocr.dart';
-import 'package:meme_album/service/store.dart';
-
 import 'package:logger/logger.dart';
 import 'package:event_bus/event_bus.dart';
 

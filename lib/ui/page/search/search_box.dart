@@ -1,20 +1,20 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/utils.dart';
-import 'package:getwidget/getwidget.dart';
-import 'package:meme_album/service/ocr.dart';
-import 'package:meme_album/service/store.dart';
+import 'package:get_it/get_it.dart';
 import 'package:get/get.dart';
-import 'package:meme_album/pages/album/album.dart';
+
+import 'package:meme_album/service/search.dart';
+import 'package:meme_album/ui/page/album/album.dart';
 
 class SearchBox extends StatelessWidget {
-  const SearchBox({super.key});
+  final GetIt get_it;
+
+  const SearchBox({super.key, required this.get_it});
 
   @override
   Widget build(BuildContext context) {
-    final store = StoreService.instance;
+    final search = get_it<Search>();
     return Scaffold(
       body: TextField(
         // 保证输入内容和 hint 在垂直方向居中，跨平台一致
@@ -43,8 +43,11 @@ class SearchBox extends StatelessWidget {
         ),
         onSubmitted: (query) async {
           // Get.to(() => SearchPage(query: query));
-          String result = await store.search('PicInfo', query, 'jieba');
-          Get.to(() => AlbumPage([result]));
+          List<String> result = await search.searchPics(
+            query,
+            tokenizer: 'jieba',
+          );
+          Get.to(() => AlbumPage(result));
         },
       ),
     );
