@@ -1,17 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import 'package:event_bus/event_bus.dart';
-import 'package:meme_album/utils/album_utils.dart';
-
-import 'package:meme_album/service/ocr.dart';
+import 'package:meme_album/core/utils/album_utils.dart';
 
 String _normalizePath(String path) => path.replaceAll(r'\', '/');
 
@@ -25,8 +19,6 @@ class AlbumController extends GetxController {
 
   List<String> albumPath = [];
 
-  AlbumUtils albumUtils = AlbumUtils();
-
   AlbumController(List<String> paths) {
     albumPath = paths.map(_normalizePath).toList();
   }
@@ -39,7 +31,7 @@ class AlbumController extends GetxController {
 
     for (String path in albumPath) {
       if (Directory(path).existsSync()) {
-        albums.addAll(await albumUtils.scanAlbumDirectory(path));
+        albums.addAll(await scanAlbumDirectory(path));
       }
       if (File(path).existsSync()) {
         covers.add(path);
@@ -51,7 +43,7 @@ class AlbumController extends GetxController {
           covers.add(album);
         }
         if (Directory(album).existsSync()) {
-          final cover = await albumUtils.getAlbumCoverImage(album);
+          final cover = await getAlbumCoverImage(album);
           if (cover.isNotEmpty) {
             covers.add(cover);
           }
